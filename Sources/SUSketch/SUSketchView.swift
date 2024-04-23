@@ -11,6 +11,8 @@ public struct SUSketchView: View {
     @StateObject private var drawingData = DrawingData()
     @State private var currentPath = Path()
     
+    public init() {}
+    
     public var body: some View {
         VStack {
             Canvas { context, size in
