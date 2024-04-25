@@ -15,12 +15,17 @@ public struct SUSketchView: View {
     
     public var body: some View {
         VStack {
+            HStack {
+                    ColorPicker("Pen Color", selection: $drawingData.penColor)
+                    Slider(value: $drawingData.penWidth, in: 1...20)
+                }
+                .padding()
             Canvas { context, size in
-                for (path, color, isFilled) in drawingData.paths {
+                for (path, color, isFilled, lineWidth) in drawingData.paths {
                     if isFilled {
                         context.fill(path, with: .color(color))
                     } else {
-                        context.stroke(path, with: .color(color), lineWidth: 2)
+                        context.stroke(path, with: .color(color), lineWidth: lineWidth)
                     }
                 }
             }
@@ -36,14 +41,16 @@ public struct SUSketchView: View {
                             // Implement stamp logic
                             break
                         case .fill:
-                            currentPath.addLine(to: value.location)  // Just collect the points
+                            //currentPath.addLine(to: value.location)  // Just collect the points
                             break
                         }
                     }
                     .onEnded { _ in
-                        let color: Color = drawingData.currentTool == .eraser ? .white : .black
-                        let isFilled: Bool = drawingData.currentTool == .fill
-                        drawingData.addPath(currentPath, color: color, isFilled: isFilled)
+                        let isErasing = drawingData.currentTool == .eraser
+                        let color = isErasing ? .white : drawingData.penColor
+                        let lineWidth = isErasing ? 10 : drawingData.penWidth // Use a default width for eraser
+                        let isFilled = drawingData.currentTool == .fill
+                        drawingData.addPath(currentPath, color: color, isFilled: isFilled, lineWidth: lineWidth)
                         currentPath = Path()
                     }
             )
