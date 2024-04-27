@@ -6,7 +6,7 @@
 //
 
 enum DrawingTool: CustomStringConvertible {
-    case pen, eraser, stamp, fill
+    case pen, eraser, stamp, fill, brush
     
     var description: String {
         switch self {
@@ -18,6 +18,8 @@ enum DrawingTool: CustomStringConvertible {
             return "Stamp"
         case .fill:
             return "Fill"
+        case .brush:
+            return "Brush"
         }
     }
 }
