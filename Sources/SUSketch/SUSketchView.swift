@@ -1,92 +1,230 @@
 //
 //  File.swift
-//  
+//
 //
 //  Created by Aruna Udayanga on 23/04/2024.
 //
 
 import SwiftUI
+import PhotosUI
 
+// SwiftUI view for a sketching app.
 public struct SUSketchView: View {
-    @StateObject private var drawingData = DrawingData()
-    @State private var currentPath = Path()
-    @State private var lastLocation: CGPoint? = nil  // Add this to store the last location
-    
-    public init() {}
-    
+    @StateObject private var drawingData = DrawingData() // Manages drawing data.
+    @State private var currentPath = Path() // Current drawing path.
+    @State private var lastLocation: CGPoint? // Last touch point.
+    @State private var showImagePicker = false // Toggle for image picker.
+    @State private var inputImage: UIImage? // Selected image.
+    @State private var inputText: String = "" // User-entered text.
+    @State private var showTextEditor: Bool = false // Toggle for text editor.
+    @State private var textColor: Color = .black // Color for text.
+    @State private var fontSize: CGFloat = 20 // Font size for text.
+
+    public init() {} // Empty initializer for public struct.
+
     public var body: some View {
-        VStack {
-            HStack {
-                ColorPicker("Pen Color", selection: $drawingData.penColor)
-                if drawingData.currentTool == .pen {
-                    Slider(value: $drawingData.penWidth, in: 1...6)
-                } else if drawingData.currentTool == .brush {
-                    Slider(value: $drawingData.brushWidth, in: 1...40)
-                }
+        GeometryReader { geometry in
+            VStack {
+                // Header for tools like text editor and image picker.
+                SketchHeaderView(
+                    showTextEditor: $showTextEditor,
+                    inputText: $inputText,
+                    textColor: $textColor,
+                    fontSize: $fontSize,
+                    showImagePicker: $showImagePicker,
+                    inputImage: $inputImage,
+                    drawingData: drawingData
+                )
+                // Main drawing area handling touch and drawing.
+                SketchBodyView(
+                    drawingData: drawingData,
+                    currentPath: $currentPath,
+                    lastLocation: $lastLocation
+                )
+                // Footer for additional controls or status.
+                SketchFooterView(drawingData: drawingData)
             }
-            .padding()
-            Canvas { context, size in
-                for (path, color, isFilled, lineWidth) in drawingData.paths {
-                    if isFilled {
-                        context.fill(path, with: .color(color))
-                    } else {
-                        context.stroke(path, with: .color(color), lineWidth: lineWidth)
-                    }
-                }
+        }
+    }
+}
+
+struct SketchBodyView: View {
+    @ObservedObject var drawingData: DrawingData // Observes drawing data for changes.
+    @Binding var currentPath: Path // Binding to the current drawing path.
+    @Binding var lastLocation: CGPoint? // Binding to track last touch location.
+    @State private var inputImage: UIImage? // Holds the image selected from the picker.
+    
+    var body: some View {
+        Canvas { context, size in
+            // Render each text element as an image in the drawing context.
+            for textElement in drawingData.texts {
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: textElement.fontSize),
+                    .foregroundColor: UIColor(textElement.color)
+                ]
+                let attributedString = NSAttributedString(string: textElement.text, attributes: attributes)
+                let textSize = attributedString.size()
+                let textImage = attributedString.toImage(with: textSize)
+                context.draw(textImage, in: CGRect(origin: textElement.position, size: textSize))
             }
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onChanged { value in
-                        switch drawingData.currentTool {
-                        case .pen, .brush:
-                            // If this is the start of the drag, set the initial point
-                            if currentPath.isEmpty {
-                                currentPath.move(to: value.startLocation)
-                                lastLocation = value.startLocation
-                            }
-                            // If it's a brush stroke, use a quadratic curve
-                            if drawingData.currentTool == .brush {
-                                if let lastLocation = lastLocation {
-                                    let newPoint = value.location
-                                    let midPoint = CGPoint(x: (lastLocation.x + newPoint.x) / 2, y: (lastLocation.y + newPoint.y) / 2)
-                                    currentPath.addQuadCurve(to: midPoint, control: lastLocation)
-                                    currentPath.addLine(to: newPoint)  // This creates a more continuous stroke
-                                }
-                            } else {
-                                currentPath.addLine(to: value.location)
-                            }
-                            lastLocation = value.location  // Update the last known location
-                        case .eraser:
-                            currentPath.addLine(to: value.location)
-                            lastLocation = value.location
-                        case .stamp:
-                            // Implement stamp logic
-                            break
-                        case .fill:
-                            //currentPath.addLine(to: value.location)  // Just collect the points
-                            break
-                        }
-                    }
-                    .onEnded { _ in
-                        let isErasing = drawingData.currentTool == .eraser
-                        let color = isErasing ? .white : drawingData.penColor
-                        let lineWidth = isErasing ? 10 : drawingData.currentWidth // Use the appropriate width for the tool
-                        let isFilled = drawingData.currentTool == .fill
-                        self.lastLocation = nil
-                        drawingData.addPath(currentPath, color: color, isFilled: isFilled, lineWidth: lineWidth)
-                        currentPath = Path()
-                    }
-            )
-            HStack {
-                Button("Undo") { drawingData.undo() }
-                Button("Redo") { drawingData.redo() }
-                Button("Clear") { drawingData.clear() }
-                ForEach([DrawingTool.pen, DrawingTool.eraser, DrawingTool.brush, DrawingTool.fill], id: \.self) { tool in
-                    Button(tool.description) {
-                        drawingData.currentTool = tool
-                    }
+            // Draw the input image if available.
+            if let uiImage = inputImage {
+                let image = Image(uiImage: uiImage)
+                image.resizable().aspectRatio(contentMode: .fit).frame(width: size.width, height: size.height)
+            }
+            // Render background or foreground images and fills.
+            if let image = drawingData.image {
+                context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+            }
+            if drawingData.currentTool == .fill {
+                context.fill(Rectangle().path(in: CGRect(x: 0, y: 0, width: size.width, height: size.height)), with: .color(drawingData.penColor))
+            }
+            // Render each path with appropriate style.
+            for (path, color, isFilled, lineWidth) in drawingData.paths {
+                if isFilled {
+                    context.fill(path, with: .color(color))
+                } else {
+                    context.stroke(path, with: .color(color), lineWidth: lineWidth)
                 }
             }
         }
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { value in
+                    // Handle drag for moving text or drawing with selected tool.
+                    if let index = drawingData.texts.firstIndex(where: { $0.isSelected }) {
+                        // Move selected text.
+                        drawingData.texts[index].position = CGPoint(
+                            x: drawingData.texts[index].position.x + value.translation.width,
+                            y: drawingData.texts[index].position.y + value.translation.height
+                        )
+                    }
+                    switch drawingData.currentTool {
+                    case .pen, .brush:
+                        if currentPath.isEmpty {
+                            currentPath.move(to: value.startLocation)
+                            lastLocation = value.startLocation
+                        }
+                        if drawingData.currentTool == .brush {
+                            if let lastLocation = lastLocation {
+                                let newPoint = value.location
+                                let midPoint = CGPoint(x: (lastLocation.x + newPoint.x) / 2, y: (lastLocation.y + newPoint.y) / 2)
+                                currentPath.addQuadCurve(to: midPoint, control: lastLocation)
+                                currentPath.addLine(to: newPoint)
+                            }
+                        } else {
+                            currentPath.addLine(to: value.location)
+                        }
+                        lastLocation = value.location
+                    case .eraser, .stamp, .fill:
+                        // Handle eraser, stamp, and fill tools.
+                        currentPath.addLine(to: value.location)
+                        lastLocation = value.location
+                    }
+                }
+                .onEnded { _ in
+                    // Finalize the drawing path when the gesture ends.
+                    let isErasing = drawingData.currentTool == .eraser
+                    let color = isErasing ? .white : drawingData.penColor
+                    let lineWidth = isErasing ? 10 : drawingData.currentWidth
+                    let isFilled = drawingData.currentTool == .fill
+                    drawingData.addPath(currentPath, color: color, isFilled: isFilled, lineWidth: lineWidth)
+                    currentPath = Path()
+                    for i in 0..<drawingData.texts.count {
+                        drawingData.texts[i].isSelected = false
+                    }
+                }
+        )
+        .contentShape(Rectangle())
+    }
+}
+
+struct SketchHeaderView: View {
+    @Binding var showTextEditor: Bool // Toggles visibility of the text editor.
+    @Binding var inputText: String // Binds to the text input for annotations.
+    @Binding var textColor: Color // Binds to the selected text color.
+    @Binding var fontSize: CGFloat // Binds to the font size for text.
+    @Binding var showImagePicker: Bool // Toggles the image picker visibility.
+    @Binding var inputImage: UIImage? // Holds the selected image.
+    @ObservedObject var drawingData: DrawingData // Observes changes in drawing data.
+    
+    var body: some View {
+        HStack {
+            // Provides UI for text input and controls.
+            if showTextEditor {
+                TextField("Enter text here", text: $inputText)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+                ColorPicker("Text Color", selection: $textColor) // Chooses text color.
+                Slider(value: $fontSize, in: 12...36, step: 1) // Adjusts font size.
+                    .padding()
+                Button("Add Text") {
+                    addTextElement() // Adds text to canvas.
+                }
+                .padding()
+            }
+            Button("Add Text") {
+                showTextEditor.toggle() // Shows/hides the text editor.
+            }
+        }
+        HStack {
+            // Controls for image picking and drawing settings.
+            Button("Photo Library") {
+                showImagePicker = true // Shows the image picker.
+            }
+            .sheet(isPresented: $showImagePicker, onDismiss: loadImage) {
+                ImagePicker(image: $inputImage) // Loads an image.
+            }
+            ColorPicker("Pen Color", selection: $drawingData.penColor) // Picks pen color.
+            if drawingData.currentTool == .pen {
+                Slider(value: $drawingData.penWidth, in: 1...6) // Adjusts pen width.
+            } else if drawingData.currentTool == .brush {
+                Slider(value: $drawingData.brushWidth, in: 1...40) // Adjusts brush width.
+            }
+        }
+    }
+    
+    // Function to add a new text element to the drawing canvas.
+    private func addTextElement() {
+        let textElement = TextElement(text: inputText, position: CGPoint(x: 150, y: 150), color: textColor, fontSize: fontSize)
+        drawingData.texts.append(textElement)
+        showTextEditor = false
+        inputText = "" // Resets the input field.
+    }
+    
+    // Loads the selected image into the drawing data.
+    private func loadImage() {
+        guard let inputImage = inputImage else { return }
+        drawingData.image = Image(uiImage: inputImage)
+    }
+}
+
+struct SketchFooterView: View {
+    @ObservedObject var drawingData: DrawingData // Observes changes in drawing data.
+    
+    var body: some View {
+        HStack {
+            // Buttons for undo, redo, and clear actions.
+            Button("Undo") { drawingData.undo() } // Undoes the last action.
+            Button("Redo") { drawingData.redo() } // Redoes the last undone action.
+            Button("Clear") { drawingData.clear() } // Clears all drawing data.
+
+            // Dynamically creates buttons for each drawing tool.
+            ForEach([DrawingTool.pen, DrawingTool.eraser, DrawingTool.brush, DrawingTool.fill], id: \.self) { tool in
+                Button(tool.description) {
+                    drawingData.currentTool = tool // Sets the current tool.
+                }
+            }
+        }
+    }
+}
+
+extension NSAttributedString {
+    func toImage(with size: CGSize) -> Image {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            self.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return Image(uiImage: image)
     }
 }
