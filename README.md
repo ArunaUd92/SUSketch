@@ -7,8 +7,8 @@
 
 SUSketch has basic functions for drawing from the beginning. Anyone can easily create drawing iOS Applications.
 
-![](https://github.com/ArunaUd92/)
-![](https://github.com/ArunaUd92/)
+![](https://github.com/ArunaUd92/SUSketch/blob/main/Images/susketch%20view.png)
+![](https://github.com/ArunaUd92/SUSketch/blob/main/Images/color-picker.png)
 
 ## Features
 - [x] Pen tool
