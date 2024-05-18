@@ -149,41 +149,91 @@ struct SketchHeaderView: View {
     @ObservedObject var drawingData: DrawingData // Observes changes in drawing data.
     
     var body: some View {
-        HStack {
-            // Provides UI for text input and controls.
-            if showTextEditor {
-                TextField("Enter text here", text: $inputText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding()
-                ColorPicker("Text Color", selection: $textColor) // Chooses text color.
-                Slider(value: $fontSize, in: 12...36, step: 1) // Adjusts font size.
-                    .padding()
-                Button("Add Text") {
-                    addTextElement() // Adds text to canvas.
+        VStack {
+            // Top bar with text editor, image picker, and drawing tools
+            HStack(spacing: 20) {
+                // Toggle text editor button
+                Button(action: {
+                    showTextEditor.toggle()
+                }) {
+                    Image(systemName: "textformat")
+                        .font(.title2)
+                        .foregroundColor(showTextEditor ? .blue : .primary)
                 }
-                .padding()
+                
+                // Open image picker button
+                Button(action: {
+                    showImagePicker = true
+                }) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.title2)
+                        .foregroundColor(.primary)
+                }
+                .sheet(isPresented: $showImagePicker, onDismiss: loadImage) {
+                    ImagePicker(image: $inputImage)
+                }
+                
+                // Pen color picker
+                ColorPicker("", selection: $drawingData.penColor)
+                    .labelsHidden()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                
+                // Pen or brush width slider
+                if drawingData.currentTool == .pen {
+                    Slider(value: $drawingData.penWidth, in: 1...6)
+                        .frame(width: 100)
+                } else if drawingData.currentTool == .brush {
+                    Slider(value: $drawingData.brushWidth, in: 1...40)
+                        .frame(width: 100)
+                }
+                
+                Spacer()
             }
-            Button("Add Text") {
-                showTextEditor.toggle() // Shows/hides the text editor.
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
+            
+            // Text editor view
+            if showTextEditor {
+                VStack {
+                    // Text input field
+                    TextField("Enter text here", text: $inputText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .padding([.top, .leading, .trailing])
+                    
+                    HStack {
+                        // Text color picker
+                        ColorPicker("Text Color", selection: $textColor)
+                        
+                        // Font size slider
+                        Slider(value: $fontSize, in: 12...36, step: 1)
+                            .frame(width: 100)
+                            .padding([.leading, .trailing])
+                        
+                        // Add text element button
+                        Button(action: {
+                            addTextElement()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle.fill")
+                                    .imageScale(.large)
+                                    .frame(height: 26)
+                                Text("Add")
+                                    .font(.system(size: 15))
+                            }
+                            .frame(height: 45)
+                        }
+                        .padding(.trailing)
+                    }
+                    .padding([.bottom, .leading, .trailing])
+                }
+                .background(Color(.systemGray5))
+                .cornerRadius(10)
             }
         }
-        HStack {
-            // Controls for image picking and drawing settings.
-            Button("Photo Library") {
-                showImagePicker = true // Shows the image picker.
-            }
-            .sheet(isPresented: $showImagePicker, onDismiss: loadImage) {
-                ImagePicker(image: $inputImage) // Loads an image.
-            }
-            ColorPicker("Pen Color", selection: $drawingData.penColor) // Picks pen color.
-            if drawingData.currentTool == .pen {
-                Slider(value: $drawingData.penWidth, in: 1...6) // Adjusts pen width.
-            } else if drawingData.currentTool == .brush {
-                Slider(value: $drawingData.brushWidth, in: 1...40) // Adjusts brush width.
-            }
-        }
+        .padding()
     }
-    
     // Function to add a new text element to the drawing canvas.
     private func addTextElement() {
         let textElement = TextElement(text: inputText, position: CGPoint(x: 150, y: 150), color: textColor, fontSize: fontSize)
