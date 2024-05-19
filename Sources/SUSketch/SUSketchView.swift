@@ -116,7 +116,7 @@ struct SketchBodyView: View {
                             currentPath.addLine(to: value.location)
                         }
                         lastLocation = value.location
-                    case .eraser, .stamp, .fill:
+                    case .eraser, .fill:
                         // Handle eraser, stamp, and fill tools.
                         currentPath.addLine(to: value.location)
                         lastLocation = value.location
@@ -253,19 +253,56 @@ struct SketchFooterView: View {
     @ObservedObject var drawingData: DrawingData // Observes changes in drawing data.
     
     var body: some View {
-        HStack {
-            // Buttons for undo, redo, and clear actions.
-            Button("Undo") { drawingData.undo() } // Undoes the last action.
-            Button("Redo") { drawingData.redo() } // Redoes the last undone action.
-            Button("Clear") { drawingData.clear() } // Clears all drawing data.
-
-            // Dynamically creates buttons for each drawing tool.
+        HStack(spacing: 20) {
+            // Undo button with icon
+            Button(action: {
+                drawingData.undo()
+            }) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.title2)
+                    .foregroundColor(.primary)
+            }
+            
+            // Redo button with icon
+            Button(action: {
+                drawingData.redo()
+            }) {
+                Image(systemName: "arrow.uturn.forward")
+                    .font(.title2)
+                    .foregroundColor(.primary)
+            }
+            
+            // Clear button with icon
+            Button(action: {
+                drawingData.clear()
+            }) {
+                Image(systemName: "trash")
+                    .font(.title2)
+                    .foregroundColor(.red)
+            }
+            
+           // Spacer()
+            
+            // Drawing tools buttons
             ForEach([DrawingTool.pen, DrawingTool.eraser, DrawingTool.brush, DrawingTool.fill], id: \.self) { tool in
-                Button(tool.description) {
-                    drawingData.currentTool = tool // Sets the current tool.
+                Button(action: {
+                    drawingData.currentTool = tool
+                }) {
+                    VStack {
+                        Image(systemName: tool.iconName)
+                            .font(.title2)
+                            .foregroundColor(drawingData.currentTool == tool ? .blue : .primary)
+                        Text(tool.description)
+                            .font(.caption)
+                            .foregroundColor(drawingData.currentTool == tool ? .blue : .primary)
+                    }
                 }
             }
         }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
+        .padding([.leading, .trailing, .bottom])
     }
 }
 
