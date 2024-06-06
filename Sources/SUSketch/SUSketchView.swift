@@ -54,51 +54,56 @@ struct SketchBodyView: View {
     @Binding var lastLocation: CGPoint? // Binding to track last touch location.
     @State private var inputImage: UIImage? // Holds the image selected from the picker.
     
+    
     var body: some View {
-        Canvas { context, size in
-            // Render each text element as an image in the drawing context.
-            for textElement in drawingData.texts {
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.systemFont(ofSize: textElement.fontSize),
-                    .foregroundColor: UIColor(textElement.color)
-                ]
-                let attributedString = NSAttributedString(string: textElement.text, attributes: attributes)
-                let textSize = attributedString.size()
-                let textImage = attributedString.toImage(with: textSize)
-                context.draw(textImage, in: CGRect(origin: textElement.position, size: textSize))
-            }
-            // Draw the input image if available.
-            if let uiImage = inputImage {
-                let image = Image(uiImage: uiImage)
-                image.resizable().aspectRatio(contentMode: .fit).frame(width: size.width, height: size.height)
-            }
-            // Render background or foreground images and fills.
-            if let image = drawingData.image {
-                context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
-            }
-            if drawingData.currentTool == .fill {
-                context.fill(Rectangle().path(in: CGRect(x: 0, y: 0, width: size.width, height: size.height)), with: .color(drawingData.penColor))
-            }
-            // Render each path with appropriate style.
-            for (path, color, isFilled, lineWidth) in drawingData.paths {
-                if isFilled {
-                    context.fill(path, with: .color(color))
-                } else {
-                    context.stroke(path, with: .color(color), lineWidth: lineWidth)
+        ZStack {
+            Canvas { context, size in
+                // Draw the input image if available.
+                if let uiImage = inputImage {
+                    let image = Image(uiImage: uiImage)
+                    image.resizable().aspectRatio(contentMode: .fit).frame(width: size.width, height: size.height)
                 }
+                // Render background or foreground images and fills.
+                if let image = drawingData.image {
+                    context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+                }
+                if drawingData.currentTool == .fill {
+                    context.fill(Rectangle().path(in: CGRect(x: 0, y: 0, width: size.width, height: size.height)), with: .color(drawingData.penColor))
+                }
+                // Render each path with appropriate style.
+                for (path, color, isFilled, lineWidth) in drawingData.paths {
+                    if isFilled {
+                        context.fill(path, with: .color(color))
+                    } else {
+                        context.stroke(path, with: .color(color), lineWidth: lineWidth)
+                    }
+                }
+            }
+            
+            // Render draggable text elements.
+            ForEach(drawingData.texts.indices, id: \.self) { index in
+                let textElement = drawingData.texts[index]
+                Text(textElement.text)
+                    .font(.system(size: textElement.fontSize))
+                    .foregroundColor(textElement.color)
+                    .position(textElement.position)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                drawingData.texts[index].position = value.location
+                            }
+                    )
+                    .onTapGesture {
+                        for i in 0..<drawingData.texts.count {
+                            drawingData.texts[i].isSelected = false
+                        }
+                        drawingData.texts[index].isSelected = true
+                    }
             }
         }
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
-                    // Handle drag for moving text or drawing with selected tool.
-                    if let index = drawingData.texts.firstIndex(where: { $0.isSelected }) {
-                        // Move selected text.
-                        drawingData.texts[index].position = CGPoint(
-                            x: drawingData.texts[index].position.x + value.translation.width,
-                            y: drawingData.texts[index].position.y + value.translation.height
-                        )
-                    }
                     switch drawingData.currentTool {
                     case .pen, .brush:
                         if currentPath.isEmpty {
@@ -130,12 +135,10 @@ struct SketchBodyView: View {
                     let isFilled = drawingData.currentTool == .fill
                     drawingData.addPath(currentPath, color: color, isFilled: isFilled, lineWidth: lineWidth)
                     currentPath = Path()
-                    for i in 0..<drawingData.texts.count {
-                        drawingData.texts[i].isSelected = false
-                    }
                 }
         )
         .contentShape(Rectangle())
+        
     }
 }
 
