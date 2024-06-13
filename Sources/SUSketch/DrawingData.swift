@@ -1,13 +1,13 @@
 //
 //  DrawingData.swift
-//
+//  SUSketch
 //
 //  Created by Aruna Udayanga on 23/04/2024.
 //
 
 import SwiftUI
 
-struct TextElement: Identifiable {
+struct TextElement: Identifiable, Equatable {
     let id: UUID = UUID()
     var text: String
     var position: CGPoint
@@ -25,7 +25,10 @@ public class DrawingData: ObservableObject {
     @Published var brushWidth: CGFloat = 10.0 // Default width for brush.
     @Published var image: Image? = nil // Optional image that can be added to the canvas.
     @Published var texts: [TextElement] = [] // Array of text elements.
-
+    @Published var shapes: [ShapeElement] = [] // Array of shape elements.
+    @Published var currentShape: ShapeElement.ShapeType? // Currently selected shape
+    
+    
     // Computed property to adjust the line width based on the current tool.
     var currentWidth: CGFloat {
         get {
@@ -76,6 +79,13 @@ public class DrawingData: ObservableObject {
     func clear() {
         paths.removeAll()
         history.removeAll()
+        shapes.removeAll()
+        texts.removeAll()
+    }
+    
+    // Adds a shape to the shapes array.
+    func addShape(_ shapeType: ShapeElement.ShapeType) {
+        let shape = ShapeElement(type: shapeType, position: CGPoint(x: 100, y: 100), size: CGSize(width: 100, height: 100), color: penColor)
+        shapes.append(shape)
     }
 }
-
