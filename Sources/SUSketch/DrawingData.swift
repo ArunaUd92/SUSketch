@@ -85,7 +85,7 @@ public class DrawingData: ObservableObject {
     
     // Adds a shape to the shapes array.
     func addShape(_ shapeType: ShapeElement.ShapeType) {
-        let shape = ShapeElement(type: shapeType, position: CGPoint(x: 100, y: 100), size: CGSize(width: 100, height: 100), color: penColor)
+        let shape = ShapeElement(type: shapeType, position: CGPoint(x: 100, y: 100), size: CGSize(width: 100, height: 140), color: penColor)
         shapes.append(shape)
     }
 }
