@@ -19,6 +19,7 @@ public struct SUSketchView: View {
     @State private var showTextEditor: Bool = false // Toggle for text editor.
     @State private var textColor: Color = .black // Color for text.
     @State private var fontSize: CGFloat = 20 // Font size for text.
+    @State private var cursorLocation: CGPoint = .zero
 
     public init() {} // Empty initializer for public struct.
 
@@ -39,7 +40,8 @@ public struct SUSketchView: View {
                 SketchBodyView(
                     drawingData: drawingData,
                     currentPath: $currentPath,
-                    lastLocation: $lastLocation
+                    lastLocation: $lastLocation,
+                    cursorLocation: $cursorLocation
                 )
                 // Footer for additional controls or status.
                 SketchFooterView(drawingData: drawingData)
@@ -59,6 +61,7 @@ struct SketchBodyView: View {
     @Binding var currentPath: Path // Binding to the current drawing path.
     @Binding var lastLocation: CGPoint? // Binding to track last touch location.
     @State private var inputImage: UIImage? // Holds the image selected from the picker.
+    @Binding var cursorLocation: CGPoint // Binding to track cursor location.
     
     
     var body: some View {
@@ -187,10 +190,17 @@ struct SketchBodyView: View {
                         drawingData.texts[index].isSelected = true
                     }
             }
+            
+            // Display the cursor based on the selected tool
+            if drawingData.currentTool != .fill {
+                cursorView
+                    .position(cursorLocation)
+            }
         }
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
+                    cursorLocation = value.location // Update cursor location
                     switch drawingData.currentTool {
                     case .pen, .brush:
                         if currentPath.isEmpty {
@@ -227,6 +237,30 @@ struct SketchBodyView: View {
         .contentShape(Rectangle())
         
     }
+    
+    private var cursorView: some View {
+        Group {
+            switch drawingData.currentTool {
+            case .pen:
+                Image(systemName: "pencil.tip")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(.blue)
+            case .eraser:
+                Image(systemName: "eraser")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(.red)
+            case .brush:
+                Circle()
+                    .fill(Color.blue.opacity(0.5))
+                    .frame(width: 24, height: 24)
+            default:
+                EmptyView()
+            }
+        }
+    }
+
 }
 
 struct SketchHeaderView: View {
@@ -449,22 +483,6 @@ struct SketchFooterView: View {
         .cornerRadius(10)
         .padding([.leading, .trailing, .bottom])
         
-        HStack(spacing: 10) {
-            ForEach([ShapeElement.ShapeType.triangle, ShapeElement.ShapeType.rectangle, ShapeElement.ShapeType.circle, ShapeElement.ShapeType.oval, ShapeElement.ShapeType.square], id: \.self) { shape in
-                Button(action: {
-                    drawingData.addShape(shape)
-                }) {
-                    VStack {
-                        Text(shape.description.prefix(1))
-                            .font(.title2)
-                            .foregroundColor(drawingData.currentShape == shape ? .blue : .primary)
-                        Text(shape.description)
-                            .font(.caption)
-                            .foregroundColor(drawingData.currentShape == shape ? .blue : .primary)
-                    }
-                }
-            }
-        }
     }
 }
 
