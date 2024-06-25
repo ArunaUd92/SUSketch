@@ -19,6 +19,7 @@ public struct SUSketchView: View {
     @State private var showTextEditor: Bool = false // Toggle for text editor.
     @State private var textColor: Color = .black // Color for text.
     @State private var fontSize: CGFloat = 20 // Font size for text.
+    @State private var cursorLocation: CGPoint = .zero
 
     public init() {} // Empty initializer for public struct.
 
@@ -39,7 +40,8 @@ public struct SUSketchView: View {
                 SketchBodyView(
                     drawingData: drawingData,
                     currentPath: $currentPath,
-                    lastLocation: $lastLocation
+                    lastLocation: $lastLocation,
+                    cursorLocation: $cursorLocation
                 )
                 // Footer for additional controls or status.
                 SketchFooterView(drawingData: drawingData)
@@ -48,11 +50,18 @@ public struct SUSketchView: View {
     }
 }
 
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        SUSketchView()
+    }
+}
+
 struct SketchBodyView: View {
     @ObservedObject var drawingData: DrawingData // Observes drawing data for changes.
     @Binding var currentPath: Path // Binding to the current drawing path.
     @Binding var lastLocation: CGPoint? // Binding to track last touch location.
     @State private var inputImage: UIImage? // Holds the image selected from the picker.
+    @Binding var cursorLocation: CGPoint // Binding to track cursor location.
     
     
     var body: some View {
@@ -78,7 +87,88 @@ struct SketchBodyView: View {
                         context.stroke(path, with: .color(color), lineWidth: lineWidth)
                     }
                 }
+                
+//                // Render each shape with appropriate style.
+//                for shape in drawingData.shapes {
+//                    let rect = CGRect(origin: shape.position, size: shape.size)
+//                    switch shape.type {
+//                    case .triangle:
+//                        let path = Path { path in
+//                            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+//                            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+//                            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+//                            path.closeSubpath()
+//                        }
+//                        context.stroke(path, with: .color(shape.color))
+//                    case .rectangle:
+//                        context.stroke(Rectangle().path(in: rect), with: .color(shape.color))
+//                    case .circle:
+//                        context.stroke(Circle().path(in: rect), with: .color(shape.color))
+//                    case .oval:
+//                        context.stroke(Ellipse().path(in: rect), with: .color(shape.color))
+//                    case .square:
+//                        let side = min(rect.width, rect.height)
+//                        let squareRect = CGRect(x: rect.origin.x, y: rect.origin.y, width: side, height: side)
+//                        context.stroke(Rectangle().path(in: squareRect), with: .color(shape.color))
+//                    }
+//
+//                }
             }
+            
+            // Render draggable and resizable shape elements.
+            ForEach(drawingData.shapes.indices, id: \.self) { index in
+                let shape = drawingData.shapes[index]
+                GeometryReader { geometry in
+                    let rect = CGRect(origin: shape.position, size: shape.size)
+                    let handleSize: CGFloat = 20
+                    let handleOffset: CGSize = CGSize(width: shape.size.width + handleSize / 2, height: shape.size.height + handleSize / 2)
+                    
+                    ZStack {
+                        // Shape view
+                        Path { path in
+                            switch shape.type {
+                            case .triangle:
+                                path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+                                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+                                path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+                                path.closeSubpath()
+                            case .rectangle:
+                                path.addRect(rect)
+                            case .circle:
+                                path.addEllipse(in: rect)
+                            case .oval:
+                                path.addEllipse(in: rect)
+                            case .square:
+                                let side = min(rect.width, rect.height)
+                                let squareRect = CGRect(x: rect.origin.x, y: rect.origin.y, width: side, height: side)
+                                path.addRect(squareRect)
+                            }
+                        }
+                        .stroke(shape.color)
+                        .position(shape.position)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    drawingData.shapes[index].position = value.location
+                                }
+                        )
+                        
+                        // Resize handle
+                        Rectangle()
+                            .fill(Color.blue)
+                            .frame(width: handleSize, height: handleSize)
+                            .position(x: shape.position.x + handleOffset.width, y: shape.position.y + handleOffset.height)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        let newSize = CGSize(width: value.location.x - shape.position.x - handleSize / 2, height: value.location.y - shape.position.y - handleSize / 2)
+                                        drawingData.shapes[index].size = newSize
+                                    }
+                            )
+                    }
+                }
+            }
+
             
             // Render draggable text elements.
             ForEach(drawingData.texts.indices, id: \.self) { index in
@@ -100,10 +190,17 @@ struct SketchBodyView: View {
                         drawingData.texts[index].isSelected = true
                     }
             }
+            
+            // Display the cursor based on the selected tool
+            if drawingData.currentTool != .fill {
+                cursorView
+                    .position(cursorLocation)
+            }
         }
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
+                    cursorLocation = value.location // Update cursor location
                     switch drawingData.currentTool {
                     case .pen, .brush:
                         if currentPath.isEmpty {
@@ -140,6 +237,30 @@ struct SketchBodyView: View {
         .contentShape(Rectangle())
         
     }
+    
+    private var cursorView: some View {
+        Group {
+            switch drawingData.currentTool {
+            case .pen:
+                Image(systemName: "pencil.tip")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(.blue)
+            case .eraser:
+                Image(systemName: "eraser")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(.red)
+            case .brush:
+                Circle()
+                    .fill(Color.blue.opacity(0.5))
+                    .frame(width: 24, height: 24)
+            default:
+                EmptyView()
+            }
+        }
+    }
+
 }
 
 struct SketchHeaderView: View {
@@ -150,6 +271,10 @@ struct SketchHeaderView: View {
     @Binding var showImagePicker: Bool // Toggles the image picker visibility.
     @Binding var inputImage: UIImage? // Holds the selected image.
     @ObservedObject var drawingData: DrawingData // Observes changes in drawing data.
+    @State private var draggedElement: TextElement?
+    @State private var dropAreaIndex: Int?
+    @State private var dragOffset: CGSize = .zero
+    @State private var showShapeSelection: Bool = false // State variable for shape selection modal
     
     var body: some View {
         VStack {
@@ -191,12 +316,24 @@ struct SketchHeaderView: View {
                         .frame(width: 100)
                 }
                 
+                // Show shape selection modal button
+                Button(action: {
+                    showShapeSelection = true
+                }) {
+                    Image(systemName: "square.on.circle")
+                        .font(.title2)
+                        .foregroundColor(.primary)
+                }
+                .sheet(isPresented: $showShapeSelection) {
+                    ShapeSelectionView(drawingData: drawingData, isPresented: $showShapeSelection)
+                }
+                
                 Spacer()
             }
             .padding()
             .background(Color(.systemGray6))
             .cornerRadius(10)
-            
+
             // Text editor view
             if showTextEditor {
                 VStack {
@@ -234,11 +371,14 @@ struct SketchHeaderView: View {
                 .background(Color(.systemGray5))
                 .cornerRadius(10)
             }
+                
+            
         }
         .padding()
     }
     // Function to add a new text element to the drawing canvas.
     private func addTextElement() {
+        print("Adding text element: \(inputText)")
         let textElement = TextElement(text: inputText, position: CGPoint(x: 150, y: 150), color: textColor, fontSize: fontSize)
         drawingData.texts.append(textElement)
         showTextEditor = false
@@ -249,6 +389,41 @@ struct SketchHeaderView: View {
     private func loadImage() {
         guard let inputImage = inputImage else { return }
         drawingData.image = Image(uiImage: inputImage)
+    }
+
+}
+
+// Shape selection modal view
+struct ShapeSelectionView: View {
+    @ObservedObject var drawingData: DrawingData
+    @Binding var isPresented: Bool // Binding to control the modal's visibility
+    
+    var body: some View {
+        VStack {
+            Text("Select Shape")
+                .font(.headline)
+                .padding()
+            
+            ForEach([ShapeElement.ShapeType.triangle, ShapeElement.ShapeType.rectangle, ShapeElement.ShapeType.circle, ShapeElement.ShapeType.oval, ShapeElement.ShapeType.square], id: \.self) { shape in
+                Button(action: {
+                    drawingData.addShape(shape)
+                    isPresented = false // Dismiss the modal after selecting a shape
+                }) {
+                    HStack {
+                        Text(shape.description)
+                            .font(.title2)
+                            .foregroundColor(drawingData.currentShape == shape ? .blue : .primary)
+                        Spacer()
+                    }
+                    .padding()
+                    .background(drawingData.currentShape == shape ? Color(.systemGray5) : Color.clear)
+                    .cornerRadius(10)
+                }
+                .padding(.horizontal)
+            }
+            
+            Spacer()
+        }
     }
 }
 
@@ -301,11 +476,13 @@ struct SketchFooterView: View {
                     }
                 }
             }
+            
         }
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(10)
         .padding([.leading, .trailing, .bottom])
+        
     }
 }
 
